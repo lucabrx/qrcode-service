@@ -1,7 +1,6 @@
 package org.lukabrx.qrcodeservice;
 
 import com.google.zxing.WriterException;
-
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -24,29 +23,21 @@ public class ApiController {
     }
 
     @GetMapping("/api/qrcode")
-    public ResponseEntity<?> getQRCode(@RequestParam String contents, @RequestParam int size, @RequestParam String type)  {
-        if (contents == null || contents.trim().isEmpty()) {
-            return new ResponseEntity<>(Map.of(
-                    "error",
-                    "Contents cannot be null or blank"),
-                    HttpStatus.BAD_REQUEST);
+    public ResponseEntity<?> getQRCode(
+            @RequestParam String contents,
+            @RequestParam(defaultValue = "250") int size,
+            @RequestParam(defaultValue = "png") String type,
+            @RequestParam(defaultValue = "L") String correction
+    )  {
+
+        ResponseEntity<Map<String, String>> validationResult = ApiUtils.validateParameters(contents, size, type, correction);
+        if (validationResult != null) {
+            return validationResult;
         }
 
-        if (!ApiUtils.isValidSize(size)) {
-            return new ResponseEntity<>(Map.of(
-                    "error",
-                    "Image size must be between 150 and 350 pixels"),
-                    HttpStatus.BAD_REQUEST);
-        }
-        if (!ApiUtils.isValidFormat(type)) {
-            return new ResponseEntity<>(Map.of(
-                    "error",
-                    "Only png, jpeg and gif image types are supported"),
-                    HttpStatus.BAD_REQUEST);
-        }
 
         try {
-            BufferedImage qrImage = ApiUtils.generateQRCodeImage(contents, size, type);
+            BufferedImage qrImage = ApiUtils.generateQRCodeImage(contents, size, type, correction);
             ByteArrayOutputStream byteStream = new ByteArrayOutputStream();
             ImageIO.write(qrImage, type.toLowerCase(), byteStream);
             byte[] imageBytes = byteStream.toByteArray();
