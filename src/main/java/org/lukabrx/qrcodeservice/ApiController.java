@@ -1,6 +1,10 @@
 package org.lukabrx.qrcodeservice;
 
-
+import com.google.zxing.BarcodeFormat;
+import com.google.zxing.WriterException;
+import com.google.zxing.client.j2se.MatrixToImageWriter;
+import com.google.zxing.common.BitMatrix;
+import com.google.zxing.qrcode.QRCodeWriter;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -19,7 +23,6 @@ import java.util.Set;
 @RestController
 public class ApiController {
     private static final Set<String> SUPPORTED_FORMATS = Set.of("png", "jpeg", "gif");
-    private final ImageGenerator imageGenerator = new ImageGenerator();
 
 
     @GetMapping("/api/health")
@@ -28,7 +31,14 @@ public class ApiController {
     }
 
     @GetMapping("/api/qrcode")
-    public ResponseEntity<?> getQRCode(@RequestParam int size, @RequestParam String type) throws IOException {
+    public ResponseEntity<?> getQRCode(@RequestParam String contents, @RequestParam int size, @RequestParam String type) throws IOException {
+        if(contents == null || contents.trim().isEmpty()) {
+            return new ResponseEntity<>(Map.of(
+                    "error",
+                    "Contents cannot be null or blank"),
+                    HttpStatus.BAD_REQUEST);
+        }
+
         if(size < 150 || size > 350) {
             return new ResponseEntity<>(Map.of(
                     "error",
@@ -42,18 +52,21 @@ public class ApiController {
                     HttpStatus.BAD_REQUEST);
         }
 
-        BufferedImage image = imageGenerator.createWhiteImage(size, size);
-        MediaType mediaType = MediaType.valueOf("image/" + type.toLowerCase());
-
-        try (ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
-            ImageIO.write(image, type.toLowerCase(), baos);
+        try {
+            BufferedImage qrImage = generateQRCodeImage(contents, size, type);
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            ImageIO.write(qrImage, type.toLowerCase(), baos);
             byte[] imageBytes = baos.toByteArray();
-
+            MediaType mediaType = MediaType.valueOf("image/" + type.toLowerCase());
             return ResponseEntity.ok().contentType(mediaType).body(imageBytes);
-
-        } catch (IOException e) {
+        } catch (WriterException | IOException e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
-}
 
+    private BufferedImage generateQRCodeImage(String contents, int size, String type) throws WriterException {
+        QRCodeWriter qrCodeWriter = new QRCodeWriter();
+        BitMatrix bitMatrix = qrCodeWriter.encode(contents, BarcodeFormat.QR_CODE,size,size);
+        return MatrixToImageWriter.toBufferedImage(bitMatrix);
+    }
+}
